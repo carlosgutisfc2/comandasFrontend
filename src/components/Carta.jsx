@@ -1,99 +1,129 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom'; 
-import { styles } from '../styles/CartaStyles.js'; // Conexión al archivo modular de estilos
+import { styles } from '../styles/CartaStyles.js';
 
+// =========================================================================
+// 🛠️ FUNCIONES UTILERÍA (Fuera del componente para optimizar rendimiento)
+// =========================================================================
+
+// Asigna un emoji visual según el texto de la categoría
+const obtenerEmojiPorCategoria = (categoria) => {
+  if (!categoria) return "🍽️";
+  const cat = categoria.toLowerCase();
+  if (cat.includes("bebida")) return "🥤";
+  if (cat.includes("hamburguesa")) return "🍔";
+  if (cat.includes("entrantes")) return "🥗";
+  if (cat.includes("postre")) return "🍰";
+  return "🍽️";
+};
+
+// Controla el orden de aparición de los platos en la carta
+const obtenerPrioridadCategoria = (categoria) => {
+  if (!categoria) return 5;
+  const cat = categoria.toLowerCase();
+  if (cat.includes("bebida")) return 1;
+  if (cat.includes("entrantes")) return 2;
+  if (cat.includes("hamburguesa")) return 3;
+  if (cat.includes("postre")) return 4;
+  return 5;
+};
+
+// Evita que descripciones muy largas rompan la maquetación de las tarjetas
+const truncarTexto = (texto, limite = 60) => {
+  if (!texto) return '';
+  return texto.length > limite ? texto.substring(0, limite) + '...' : texto;
+};
+
+
+// =========================================================================
+// ⚛️ COMPONENTE PRINCIPAL
+// =========================================================================
 const Carta = () => {
   const navigate = useNavigate(); 
+  
+  // Estados de la aplicación
   const [mensaje, setMensaje] = useState('');
   const [carrito, setCarrito] = useState([]); 
-  const [cartOpen, setCartOpen] = useState(false); 
   const [productosMenu, setProductosMenu] = useState([]); 
-  const [cargandoProductos, setCargandoProductos] = useState(true);
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('TODOS');
-
-  const [ordersOpen, setOrdersOpen] = useState(false);
-  const [pedidosRealizados, setPedidosRealizados] = useState([]);
-  const [cargandoHistorial, setCargandoHistorial] = useState(false);
-
-  // 🎯 coste total de lo que lleva consumido la mesa
   const [totalMesa, setTotalMesa] = useState(0);
+  const [pedidosRealizados, setPedidosRealizados] = useState([]);
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('TODOS');
+  
+  // Estados de control de visibilidad (Modales/Desplegables)
+  const [cartOpen, setCartOpen] = useState(false); 
+  const [ordersOpen, setOrdersOpen] = useState(false);
 
-  // Estados de control de la mesa y restricciones de acceso
+  // Estados de carga y validación de seguridad
+  const [cargandoProductos, setCargandoProductos] = useState(true);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [cargandoMesa, setCargandoMesa] = useState(true);
   const [mesaValida, setMesaValida] = useState(true);
   const [mensajeMesaError, setMensajeMesaError] = useState('');
-  const [cargandoMesa, setCargandoMesa] = useState(true);
 
-  // Captura el ancho de la pantalla actual del dispositivo
+  // Control de diseño responsivo
   const [anchoVentana, setAnchoVentana] = useState(window.innerWidth);
 
+  // Datos de sesión local
   const numMesa = localStorage.getItem('numMesa');
   const token = localStorage.getItem('token');
-  
-  // Comprobamos si el usuario actual es un empleado
   const esEmpleado = localStorage.getItem('role') === 'EMPLEADO';
 
-  // Escucha cuando la pantalla cambia de tamaño (Resize)
+  // Manejador del tamaño de pantalla
   useEffect(() => {
     const handleResize = () => setAnchoVentana(window.innerWidth);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 📋 ACTUALIZADO: Cambiada la ruta a /mesas/{codigoMesa}/total
+  // Petición al endpoint para obtener el total acumulado real en la base de datos
   const cargarTotalMesa = async () => {
     if (!numMesa || !token) return;
     try {
       const config = { headers: { 'Authorization': `Bearer ${token}` } };
       const response = await axios.get(`http://localhost:8080/mesas/${numMesa}/total`, config);
-      setTotalMesa(typeof response.data === 'number' ? response.data : 0);
+      setTotalMesa(typeof response.data === 'number' ? response.data : 0); //Al hacer la peticion, si el backend responde con un número, lo asignamos. Si no, ponemos 0 para evitar errores de NaN.
     } catch (err) {
       console.error("Error al recuperar el importe total de la mesa:", err);
     }
   };
 
-  // 🛠️ VALIDACIÓN DE MESA Y CARGA DE PRODUCTOS AL ARRANCAR
+  // Inicialización: Validar mesa activa y descargar la lista de productos
   useEffect(() => {
-    const cargarContenidoYValidarMesa = async () => {
+    const inicializarCarta = async () => {
+      if (!token) return;
       try {
-        setCargandoMesa(true);
+        setCargandoMesa(true); //Hace que el componente muestre un mensaje de validación mientras se verifica la mesa y se cargan los productos, evitando mostrar la carta vacía o con errores.
         const config = { headers: { 'Authorization': `Bearer ${token}` } };
         
-        // 1. Forzamos la validación contra el endpoint blindado del backend
+        // 1. Validamos la mesa contra el backend
         await axios.get(`http://localhost:8080/pedido/${numMesa}/pedidos`, config);
-        setMesaValida(true);
-
-        // 2. Cargamos el total acumulado por primera vez
+        setMesaValida(true); //Si la petición es exitosa, la mesa es válida y podemos mostrar la carta. Si no, se lanzará un error.
+        // 2. Cargamos el subtotal de consumo
         await cargarTotalMesa();
 
-        // 3. Descargamos los productos de la carta
+        // 3. Obtenemos los productos disponibles del catálogo
         const response = await axios.get('http://localhost:8080/productos', config);
-        
-        if (response.data && Array.isArray(response.data)) {
-          setProductosMenu(response.data);
-        } else {
-          setProductosMenu([]);
-        }
+        setProductosMenu(Array.isArray(response.data) ? response.data : []);
+
       } catch (err) {
-        console.error("Error en la inicialización y validación de mesa:", err);
-        if (err.response && (err.response.status === 404 || err.response.status === 403 || err.response.status === 400)) {
+        console.error("Error en la inicialización:", err);
+        if (err.response && [400, 403, 404].includes(err.response.status)) {
           setMesaValida(false);
           setMensajeMesaError('La mesa seleccionada no existe o se encuentra cerrada actualmente.');
         } else {
           setMensaje('❌ No se pudo cargar la carta desde el servidor.');
         }
       } finally {
-        setCargandoProductos(false);
-        setCargandoMesa(false);
+        setCargandoProductos(false); //Dependiendo del valor que tenga mostrara un texto de carga o la carta con los productos, evitando mostrar una carta vacía mientras se hace la petición.
+        setCargandoMesa(false); //Dependiendo del valor que tenga mostrara un texto de validación o la carta con los productos, evitando mostrar la carta mientras se valida la mesa.
       }
     };
 
-    if (token) {
-      cargarContenidoYValidarMesa();
-    }
-  }, [token, numMesa]);
+    inicializarCarta();
+  }, [token, numMesa]); //Se dispara solo si el token o el número de mesa cambian (no debería ocurrir durante la sesión)
 
-  // 🔄 Polling reactivo cada 8 segundos para capturar cambios (borrados/añadidos del camarero)
+  // Sincronización pasiva (Polling): Actualiza el subtotal cada 8 segundos por si hay cambios del camarero
   useEffect(() => {
     if (!token || !mesaValida) return;
 
@@ -104,127 +134,86 @@ const Carta = () => {
     return () => clearInterval(intervaloMesa);
   }, [token, mesaValida, numMesa]);
 
-
+  // Generación dinámica de la barra de categorías filtradas
   const categoriesDisponibles = [
     'TODOS', 
-    ...new Set((Array.isArray(productosMenu) ? productosMenu : []).map(p => p.categoria).filter(Boolean))
+    ...new Set(productosMenu.map(p => p.categoria).filter(Boolean)) //El set se encarga de eliminar categorías duplicadas, y el filter(Boolean) elimina cualquier categoría que sea null, undefined o vacía. Y los ... convierte el Set en un array.
   ];
 
-  const productosFiltrados = (Array.isArray(productosMenu) ? productosMenu : [])
-    .filter((p) => {
-      if (categoriaSeleccionada === 'TODOS') return true;
-      return p.categoria === categoriaSeleccionada;
-    })
-    .sort((a, b) => {
-      const asignarPrioridad = (categoria) => {
-        if (!categoria) return 99;
-        const cat = categoria.toLowerCase();
-        if (cat.includes("bebida") || cat.includes("refresco")) return 1;
-        if (cat.includes("ensalada")) return 2;
-        if (cat.includes("hamburguesa") || cat.includes("carne")) return 3;
-        if (cat.includes("postre") || cat.includes("dulce")) return 4;
-        return 5;
-      };
-      return asignarPrioridad(a.categoria) - asignarPrioridad(b.categoria);
-    });
+  // Filtrado y ordenación inteligente del catálogo en pantalla
+  const productosFiltrados = productosMenu
+    .filter(p => categoriaSeleccionada === 'TODOS' || p.categoria === categoriaSeleccionada) //Si la categoria es "TODOS", se muestran todos los productos y si no se filtran por la categoria.
+    .sort((a, b) => obtenerPrioridadCategoria(a.categoria) - obtenerPrioridadCategoria(b.categoria)); //El sort ordena los productos por la prioridad que pusimos al principio
+  // El método sort ordena los productos basándose en la prioridad asignada a su categoría, asegurando que siempre se muestren en el mismo orden lógico (bebidas primero, luego entrantes, etc.) independientemente del orden en que el backend los devuelva.
 
-  const truncarTextoInteligente = (texto) => {
-    if (!texto) return '';
-    const palabras = texto.split(/\s+/); 
-    let conteoSinEspacios = 0;
-    let palabrasAcumuladas = [];
-    let seHaTruncado = false;
-
-    for (let i = 0; i < palabras.length; i++) {
-      const palabra = palabras[i];
-      conteoSinEspacios += palabra.length;
-      palabrasAcumuladas.push(palabra);
-
-      if (conteoSinEspacios >= 30) {
-        if (i < palabras.length - 1) seHaTruncado = true;
-        break;
-      }
-    }
-    return palabrasAcumuladas.join(' ') + (seHaTruncado ? '...' : '');
-  };
-
-  const obtenerEmojiPorCategoria = (categoria) => {
-    if (!categoria) return "🍽️";
-    const cat = categoria.toLowerCase();
-    if (cat.includes("bebida") || cat.includes("refresco") || cat.includes("coca")) return "🥤";
-    if (cat.includes("hamburguesa") || cat.includes("carne") || cat.includes("principal")) return "🍔";
-    if (cat.includes("entrante") || cat.includes("patatas") || cat.includes("racion")) return "🍟";
-    if (cat.includes("ensalada")) return "🥗";
-    if (cat.includes("postre") || cat.includes("tarta") || cat.includes("dulce")) return "🍰";
-    return "🍽️";
-  };
+  // =========================================================================
+  // 🛒 GESTIÓN DEL CARRITO DE COMPRAS LOCAL
+  // =========================================================================
 
   const agregarAlCarrito = (producto) => {
-    setCarrito((prevCarrito) => {
-      const existe = prevCarrito.find((item) => item.id === producto.id);
+    setCarrito((prev) => { //Coge el carrito como estaba antes de cambiar nada
+      const existe = prev.find(item => item.id === producto.id); //Si el producto ya existe en el carrito, devuelve el producto, si no devuelve undefined
       if (existe) {
-        return prevCarrito.map((item) =>
-          item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item
-        );
+        return prev.map(item => item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item); //Se mapea el carrito y se suma 1 la cantidad del producto que coincide con el id, y el resto de productos se dejan igual (notas, etc).
       }
-      return [...prevCarrito, { ...producto, cantidad: 1, notas: "" }];
+      return [...prev, { ...producto, cantidad: 1, notas: "" }]; // Si no existe entonces se añade el producto al carrito (prev) con cantidad 1 y sin notas.
     });
   };
 
   const restarDelCarrito = (productoId) => {
-    setCarrito((prevCarrito) => {
-      const existe = prevCarrito.find((item) => item.id === productoId);
-      if (!existe) return prevCarrito;
+    setCarrito((prev) => {
+      const existe = prev.find(item => item.id === productoId);
+      if (!existe) return prev;
       if (existe.cantidad === 1) {
-        return prevCarrito.filter((item) => item.id !== productoId);
+        return prev.filter(item => item.id !== productoId); //Crea un array nuevo con los valores que no coincidan con el id del producto.
       }
-      return prevCarrito.map((item) =>
-        item.id === productoId ? { ...item, cantidad: item.cantidad - 1 } : item
-      );
+      return prev.map(item => item.id === productoId ? { ...item, cantidad: item.cantidad - 1 } : item); //Recorre el carrito y le resta 1 a la cantidad del producto que coincide con el id
     });
   };
 
   const cambiarNotas = (productoId, texto) => {
-    setCarrito((prevCarrito) =>
-      prevCarrito.map((item) =>
-        item.id === productoId ? { ...item, notas: texto } : item
-      )
-    );
+    setCarrito((prev) => prev.map(item => item.id === productoId ? { ...item, notas: texto } : item)); //Recorre el carrito y cambia las notas del producto que coincide con el id
   };
 
-  const totalItems = carrito.reduce((acc, item) => acc + item.cantidad, 0);
-  const precioTotalCarrito = carrito.reduce((acc, item) => acc + ((item.precio ?? 0) * item.cantidad), 0);
+  // Cálculos reactivos basados en el estado del carrito
+  const totalItems = carrito.reduce((acc, item) => acc + item.cantidad, 0); //Suma la cantidad de cada producto del carrito
+  const precioTotalCarrito = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0); //Suma el precio de cada producto multiplicado por su cantidad
+
+
+  // =========================================================================
+  // 🚀 INTERFACES DE COMUNICACIÓN CON EL BACKEND (POST / GET)
+  // =========================================================================
 
   const handleEnviarPedidoGlobal = async () => {
-    if (carrito.length === 0) return;
+  if (carrito.length === 0) return;
 
-    setMensaje('Enviando comanda a la cocina...');
-    const pedidoData = {
-      detalles: carrito.map((item) => ({
-        productoId: item.id,
-        shadowId: item.id, 
-        cantidad: item.cantidad,
-        notes: item.notas || "Sin notas"
-      }))
-    };
-
-    try {
-      const config = { headers: { 'Authorization': `Bearer ${token}` } };
-      const url = `http://localhost:8080/pedido/${numMesa}/pedidos`;
-
-      const response = await axios.post(url, pedidoData, config);
-      if (response.status === 200 || response.status === 201) {
-        setMensaje('✅ ¡Tu pedido ha sido enviado con éxito!');
-        setCarrito([]); 
-        setCartOpen(false); 
-        await handleVerMisPedidos(false);
-        await cargarTotalMesa(); // Sincroniza al instante tras realizar un pedido
-      }
-    } catch (err) {
-      setMensaje('❌ Error al procesar el pedido.');
-      console.error(err);
-    }
+  setMensaje('Enviando comanda a la cocina...');
+  
+  const pedidoData = { //Coge el número de mesa y el carrito para enviarlo al backend para hacer el pedido
+    codigo_mesa: numMesa,
+    detalles: carrito.map(item => ({
+      productoId: item.id,   
+      cantidad: item.cantidad, 
+      notas: item.notas || "Sin notas"
+    }))
   };
+
+  try {
+    const config = { headers: { 'Authorization': `Bearer ${token}` } };
+    const url = `http://localhost:8080/pedido/${numMesa}/pedidos`;
+
+    const response = await axios.post(url, pedidoData, config); 
+    if (response.status === 200 || response.status === 201) {
+      setMensaje('✅ ¡Tu pedido ha sido enviado con éxito!');
+      setCarrito([]); //Vacia el carrito
+      setCartOpen(false); //Cierra la ventana del carrito
+      await cargarTotalMesa(); 
+    }
+  } catch (err) {
+    setMensaje('❌ Error al procesar el pedido.');
+    console.error(err);
+  }
+};
 
   const handleVerMisPedidos = async (mostrarCarga = true) => {
     if (mostrarCarga) setCargandoHistorial(true);
@@ -236,14 +225,13 @@ const Carta = () => {
     } catch (err) {
       console.error("Error al obtener pedidos de la mesa:", err);
     } finally {
-      if (mostrarCarga) setCargandoHistorial(false);
+      setCargandoHistorial(false);
     }
   };
 
-  const obtenerNombreProducto = (id) => {
-    const prod = productosMenu.find(p => p.id === id);
-    return prod ? prod.nombre : `Producto #${id}`;
-  };
+  // =========================================================================
+  // 🖥️ CONTROL DE RENDERIZADOS Y CORTAFUEGOS DE SEGURIDAD
+  // =========================================================================
 
   if (cargandoMesa) {
     return (
@@ -276,37 +264,17 @@ const Carta = () => {
       {/* HEADER PRINCIPAL */}
       <header style={styles.header}>
         <div style={styles.headerLeft}>
-          <img 
-            src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=180&auto=format&fit=crop&q=60" 
-            alt="Logo" 
-            style={styles.logoImg} 
-          />
+          <img src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=180&auto=format&fit=crop&q=60" alt="Logo" style={styles.logoImg} />
           {anchoVentana > 540 && <h1 style={styles.restaurantName}>Gourmet App</h1>}
         </div>
         
         <div style={styles.headerRight}>
-          <button 
-            style={ordersOpen ? styles.historyIconBtnActive : styles.historyIconBtn} 
-            onClick={() => { setOrdersOpen(!ordersOpen); setCartOpen(false); if (!ordersOpen) handleVerMisPedidos(); }}
-          >
+          <button style={ordersOpen ? styles.historyIconBtnActive : styles.historyIconBtn} onClick={() => { setOrdersOpen(!ordersOpen); setCartOpen(false); if (!ordersOpen) handleVerMisPedidos(); }}>
             ⏱️ Mis Pedidos
           </button>
 
-          {/* 🎯 BOTÓN/INDICADOR DE PRECIO TOTAL ACUMULADO */}
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            backgroundColor: '#fff',
-            border: '1px solid #e2e8f0',
-            padding: '6px 14px',
-            borderRadius: '20px',
-            fontSize: '0.88rem',
-            fontWeight: '600',
-            color: '#475569',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.02)',
-            userSelect: 'none',
-            whiteSpace: 'nowrap'
-          }}>
+          {/* INDICADOR DE PRECIO TOTAL ACUMULADO */}
+          <div style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: '#fff', border: '1px solid #e2e8f0', padding: '6px 14px', borderRadius: '20px', fontSize: '0.88rem', fontWeight: '600', color: '#475569', boxShadow: '0 2px 5px rgba(0,0,0,0.02)', userSelect: 'none', whiteSpace: 'nowrap' }}>
             📋 Subtotal: <span style={{ color: '#28a745', fontWeight: '800', marginLeft: '4px' }}>{totalMesa.toFixed(2)}€</span>
           </div>
 
@@ -333,20 +301,14 @@ const Carta = () => {
                   <div key={item.id} style={styles.itemRow}>
                     <div style={styles.itemInfo}>
                       <span><strong>{item.nombre}</strong></span>
-                      <span>{((item.precio ?? 0) * item.cantidad).toFixed(2)}€</span>
+                      <span>{(item.precio * item.cantidad).toFixed(2)}€</span>
                     </div>
                     <div style={styles.quantityControls}>
                       <button style={styles.btnMinus} onClick={() => restarDelCarrito(item.id)}>-</button>
                       <span style={{ fontWeight: '700' }}>{item.cantidad}</span>
                       <button style={styles.btnPlus} onClick={() => agregarAlCarrito(item)}>+</button>
                     </div>
-                    <input
-                      type="text"
-                      placeholder="Notas para cocina..."
-                      value={item.notes || ""} 
-                      onChange={(e) => cambiarNotas(item.id, e.target.value)}
-                      style={styles.inputNotas}
-                    />
+                    <input type="text" placeholder="Notas para cocina..." value={item.notes || ""} onChange={(e) => cambiarNotas(item.id, e.target.value)} style={styles.inputNotas} />
                   </div>
                 ))}
               </div>
@@ -381,7 +343,7 @@ const Carta = () => {
                   <ul style={styles.orderHistoryLines}>
                     {pedido.detalles?.map((det, i) => (
                       <li key={i} style={{ marginBottom: '4px', listStyleType: 'none' }}>
-                        <b style={{ color: '#007bff' }}>{det.cantidad}x</b> {obtenerNombreProducto(det.productoId)}
+                        <b style={{ color: '#007bff' }}>{det.cantidad}x</b> {det.nombreProducto}
                         {det.notas && det.notas !== "Sin notas" && <div style={styles.historyNotasLine}>✏️ {det.notas}</div>}
                       </li>
                     ))}
@@ -404,16 +366,7 @@ const Carta = () => {
           {categoriesDisponibles.map((cat) => {
             const esActivo = categoriaSeleccionada === cat;
             return (
-              <button
-                key={cat}
-                onClick={() => setCategoriaSeleccionada(cat)}
-                style={{
-                  ...styles.categoryBtn,
-                  backgroundColor: esActivo ? '#1a1a1a' : '#f1f3f5',
-                  color: esActivo ? '#fff' : '#495057',
-                  fontWeight: esActivo ? '700' : '500',
-                }}
-              >
+              <button key={cat} onClick={() => setCategoriaSeleccionada(cat)} style={{ ...styles.categoryBtn, backgroundColor: esActivo ? '#1a1a1a' : '#f1f3f5', color: esActivo ? '#fff' : '#495057', fontWeight: esActivo ? '700' : '500' }}>
                 {cat}
               </button>
             );
@@ -432,7 +385,7 @@ const Carta = () => {
         ) : (
           <div style={styles.grid}>
             {productosFiltrados.map((p) => {
-              const enCarrito = carrito.find((item) => item.id === p.id);
+              const enCarrito = carrito.find(item => item.id === p.id);
               const cantidadEnCarrito = enCarrito ? enCarrito.cantidad : 0;
 
               return (
@@ -444,11 +397,11 @@ const Carta = () => {
                   <div style={styles.prodContentBody}>
                     <span style={styles.prodCategoria}>{p.categoria || 'General'}</span>
                     <h4 style={styles.prodNombre}>{p.nombre}</h4>
-                    <p style={styles.prodDescripcion}>{truncarTextoInteligente(p.descripcion)}</p>
+                    <p style={styles.prodDescripcion}>{truncarTexto(p.descripcion)}</p>
                   </div>
 
                   <div style={styles.rightActionContainer}>
-                    <span style={styles.prodPrecio}>{((p.precio ?? 0)).toFixed(2)}€</span>
+                    <span style={styles.prodPrecio}>{(p.precio ?? 0).toFixed(2)}€</span>
                     
                     {cantidadEnCarrito === 0 ? (
                       <button style={styles.btnAnadirRight} onClick={() => agregarAlCarrito(p)}>
