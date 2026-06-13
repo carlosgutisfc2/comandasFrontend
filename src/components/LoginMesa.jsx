@@ -40,7 +40,7 @@ const LoginMesa = () => {
         setError('La contraseña introducida no es correcta.');
       }
     } catch (err) {
-      if (err.response && err.response.status === 500) {
+      if (err.response && err.response.status === 404) {
         setError(`La mesa "${mesa}" no existe en el sistema.`);
       } else {
         setError('No se pudo conectar con el servidor. Verifica el CORS.');

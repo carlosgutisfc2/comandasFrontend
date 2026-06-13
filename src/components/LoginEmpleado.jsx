@@ -23,7 +23,7 @@ const LoginEmpleado = () => {
 
       if (response.data && response.data.token) {
         // Almacenamos los datos de sesión esenciales
-        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('token', response.data.token); //Guarda en el navegador. Lo llama Token a lo que viene como dato de respuesta en lo que se llama Token
         localStorage.setItem('role', 'EMPLEADO'); // 👈 LÍNEA NUEVA: Guarda el rol del trabajador
         
         console.log("Login de empleado exitoso. Redirigiendo a la centralita...");

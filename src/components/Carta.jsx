@@ -23,7 +23,7 @@ const obtenerPrioridadCategoria = (categoria) => {
   if (!categoria) return 5;
   const cat = categoria.toLowerCase();
   if (cat.includes("bebida")) return 1;
-  if (cat.includes("entrantes")) return 2;
+  if (cat.includes("entrante")) return 2;
   if (cat.includes("hamburguesa")) return 3;
   if (cat.includes("postre")) return 4;
   return 5;
@@ -96,8 +96,6 @@ const Carta = () => {
         setCargandoMesa(true); //Hace que el componente muestre un mensaje de validación mientras se verifica la mesa y se cargan los productos, evitando mostrar la carta vacía o con errores.
         const config = { headers: { 'Authorization': `Bearer ${token}` } };
         
-        // 1. Validamos la mesa contra el backend
-        await axios.get(`http://localhost:8080/pedido/${numMesa}/pedidos`, config);
         setMesaValida(true); //Si la petición es exitosa, la mesa es válida y podemos mostrar la carta. Si no, se lanzará un error.
         // 2. Cargamos el subtotal de consumo
         await cargarTotalMesa();
@@ -194,7 +192,7 @@ const Carta = () => {
     detalles: carrito.map(item => ({
       productoId: item.id,   
       cantidad: item.cantidad, 
-      notas: item.notas || "Sin notas"
+      notas: item.notas || "Sin notas" /*Si no tiene notas se enviara "Sin notas" */
     }))
   };
 
@@ -265,32 +263,32 @@ const Carta = () => {
       <header style={styles.header}>
         <div style={styles.headerLeft}>
           <img src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=180&auto=format&fit=crop&q=60" alt="Logo" style={styles.logoImg} />
-          {anchoVentana > 540 && <h1 style={styles.restaurantName}>Gourmet App</h1>}
+          {anchoVentana > 540 && <h1 style={styles.restaurantName}>Gourmet App</h1>} {/* Por si la pantalla es muy chica */}
         </div>
         
         <div style={styles.headerRight}>
-          <button style={ordersOpen ? styles.historyIconBtnActive : styles.historyIconBtn} onClick={() => { setOrdersOpen(!ordersOpen); setCartOpen(false); if (!ordersOpen) handleVerMisPedidos(); }}>
+          <button style={ordersOpen ? styles.historyIconBtnActive : styles.historyIconBtn} onClick={() => { setOrdersOpen(!ordersOpen); setCartOpen(false); if (!ordersOpen) handleVerMisPedidos(); }}> {/*Cierra el carrito y abre los pedidos*/}
             ⏱️ Mis Pedidos
           </button>
 
-          {/* INDICADOR DE PRECIO TOTAL ACUMULADO */}
           <div style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: '#fff', border: '1px solid #e2e8f0', padding: '6px 14px', borderRadius: '20px', fontSize: '0.88rem', fontWeight: '600', color: '#475569', boxShadow: '0 2px 5px rgba(0,0,0,0.02)', userSelect: 'none', whiteSpace: 'nowrap' }}>
-            📋 Subtotal: <span style={{ color: '#28a745', fontWeight: '800', marginLeft: '4px' }}>{totalMesa.toFixed(2)}€</span>
+            📋 Subtotal: <span style={{ color: '#28a745', fontWeight: '800', marginLeft: '4px' }}>{totalMesa.toFixed(2)}€</span> {/*2 decimales */}
           </div>
 
           <button style={cartOpen ? styles.cartIconBtnActive : styles.cartIconBtn} onClick={() => { setCartOpen(!cartOpen); setOrdersOpen(false); }}>
             🛒 <span style={styles.badgeCount}>{totalItems}</span>
           </button>
           
-          <button style={styles.logoutBtn} onClick={() => { if (esEmpleado) { navigate('/panel-empleado'); } else { localStorage.clear(); window.location.href = '/'; } }}>
+          <button style={styles.logoutBtn} onClick={() => { if (esEmpleado) { navigate('/panel-empleado'); } else { localStorage.clear(); window.location.href = '/'; } }}> {/*Si eres empleado te lleva al panel, si eres cliente cierra sesión y te lleva al login pero tambien te borra el JWT y numerod de mesa */}
             {esEmpleado ? 'Volver al Panel' : 'Salir'}
           </button>
         </div>
       </header>
 
       {/* DESPLEGABLE: CARRITO */}
-      {cartOpen && (
-        <div style={{ ...styles.cartDropdown, right: anchoVentana > 540 ? '40px' : '4%', width: anchoVentana > 540 ? '340px' : '92%' }}>
+      {/*No pongo pantallas de carga porque los elementos se cargan rápidamente desde el navegador */}
+      {cartOpen  && (
+        <div style={{ ...styles.cartDropdown, right: anchoVentana > 540 ? '40px' : '4%', width: anchoVentana > 540 ? '340px' : '92%' }}> {/*Pongo los 3 puntos para meter todos los estilos, si no los pongo da error */}
           <h4 style={styles.dropdownTitle}>🛒 Tu Pedido Actual</h4>
           {carrito.length === 0 ? (
             <p style={styles.emptyText}>El carrito está vacío.</p>
@@ -301,14 +299,14 @@ const Carta = () => {
                   <div key={item.id} style={styles.itemRow}>
                     <div style={styles.itemInfo}>
                       <span><strong>{item.nombre}</strong></span>
-                      <span>{(item.precio * item.cantidad).toFixed(2)}€</span>
+                      <span>{(item.precio * item.cantidad).toFixed(2)}€</span> {/*Precio por cantidad con 2 decimales */}
                     </div>
                     <div style={styles.quantityControls}>
                       <button style={styles.btnMinus} onClick={() => restarDelCarrito(item.id)}>-</button>
                       <span style={{ fontWeight: '700' }}>{item.cantidad}</span>
                       <button style={styles.btnPlus} onClick={() => agregarAlCarrito(item)}>+</button>
                     </div>
-                    <input type="text" placeholder="Notas para cocina..." value={item.notes || ""} onChange={(e) => cambiarNotas(item.id, e.target.value)} style={styles.inputNotas} />
+                    <input type="text" placeholder="Notas para cocina..." value={item.notas || ""} onChange={(e) => cambiarNotas(item.id, e.target.value)} style={styles.inputNotas} /> {/*Si no hay notas entonces muestra un string vacio. Envia a cambiarNotas el id y las notas */}
                   </div>
                 ))}
               </div>
@@ -337,14 +335,14 @@ const Carta = () => {
               {pedidosRealizados.map((pedido, index) => (
                 <div key={pedido.id || index} style={styles.orderHistoryBlock}>
                   <div style={styles.orderHistoryHeader}>
-                    <span><strong>Comanda #{index + 1}</strong></span>
-                    <span style={styles.estadoBadge}>{pedido.estado || 'En cocina'}</span>
+                    <span><strong>Comanda #{pedido.numeroPedido}</strong></span>
+                    <span style={styles.estadoBadge}>{pedido.estado}</span>
                   </div>
                   <ul style={styles.orderHistoryLines}>
                     {pedido.detalles?.map((det, i) => (
-                      <li key={i} style={{ marginBottom: '4px', listStyleType: 'none' }}>
+                      <li key={i} style={{ marginBottom: '4px', listStyleType: 'none' }}> {/*El key se usa para identificar cada elemento de la lista */}
                         <b style={{ color: '#007bff' }}>{det.cantidad}x</b> {det.nombreProducto}
-                        {det.notas && det.notas !== "Sin notas" && <div style={styles.historyNotasLine}>✏️ {det.notas}</div>}
+                        {det.notas && det.notas !== "Sin notas" && <div style={styles.historyNotasLine}>✏️ {det.notas}</div>} {/*Si hay notas y no son "Sin notas" las muestra debajo*/}
                       </li>
                     ))}
                   </ul>
@@ -352,7 +350,7 @@ const Carta = () => {
               ))}
             </div>
           )}
-          <button style={styles.btnRefreshHistory} onClick={() => { handleVerMisPedidos(true); cargarTotalMesa(); }}>
+          <button style={styles.btnRefreshHistory} onClick={() => { handleVerMisPedidos(true); cargarTotalMesa(); }}> {/*Al hacer click actualiza el historial y el total de la mesa */}
             🔄 Actualizar Estados
           </button>
         </div>
@@ -377,7 +375,7 @@ const Carta = () => {
       {/* LISTADO DE PRODUCTOS */}
       <div style={styles.menuLayoutBody}>
         <h3 style={styles.sectionTitle}>
-          {categoriaSeleccionada === 'TODOS' ? 'Nuestra Carta' : categoriaSeleccionada}
+          {categoriaSeleccionada === 'TODOS' ? 'Nuestra Carta' : categoriaSeleccionada} {/*Al haber cambiado el estado de la categoría seleccionada filtra por uno u otro*/}
         </h3>
         
         {cargandoProductos ? (
@@ -389,19 +387,19 @@ const Carta = () => {
               const cantidadEnCarrito = enCarrito ? enCarrito.cantidad : 0;
 
               return (
-                <div key={p.id} style={styles.productCard}>
+                <div key={p.id} style={styles.productCard}> {/*key es el identificador */}
                   <div style={styles.prodImageWrapper}>
                     <span style={styles.prodEmojiLarge}>{obtenerEmojiPorCategoria(p.categoria)}</span>
                   </div>
                   
                   <div style={styles.prodContentBody}>
-                    <span style={styles.prodCategoria}>{p.categoria || 'General'}</span>
+                    <span style={styles.prodCategoria}>{p.categoria}</span>
                     <h4 style={styles.prodNombre}>{p.nombre}</h4>
                     <p style={styles.prodDescripcion}>{truncarTexto(p.descripcion)}</p>
                   </div>
 
                   <div style={styles.rightActionContainer}>
-                    <span style={styles.prodPrecio}>{(p.precio ?? 0).toFixed(2)}€</span>
+                    <span style={styles.prodPrecio}>{p.precio.toFixed(2)}€</span>
                     
                     {cantidadEnCarrito === 0 ? (
                       <button style={styles.btnAnadirRight} onClick={() => agregarAlCarrito(p)}>

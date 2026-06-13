@@ -23,7 +23,7 @@ const GestionPedidos = () => {
     const role = localStorage.getItem('role');
 
     if (!token || role !== 'EMPLEADO') {
-      console.warn("Acceso denegado al monitor de cocina.");
+      console.warn("Acceso denegado por role o token");
       localStorage.clear();
       navigate('/empleado');
     }
@@ -36,16 +36,12 @@ const GestionPedidos = () => {
 
     try {
       const config = { headers: { 'Authorization': `Bearer ${token}` } };
-      
-      const resProductos = await axios.get('http://localhost:8080/productos', config);
-      if (resProductos.data && Array.isArray(resProductos.data)) {
-        setProductos(resProductos.data);
-      }
 
       const resPedidos = await axios.get('http://localhost:8080/pedido/pedidos', config);
       if (resPedidos.data) {
         setPedidos(Array.isArray(resPedidos.data) ? resPedidos.data : [resPedidos.data]);
       }
+
       setErrorStatus('');
     } catch (err) {
       console.error("Error en la sincronización:", err);
@@ -55,7 +51,7 @@ const GestionPedidos = () => {
     }
   };
 
-  // 🔄 3. TEMPORIZADOR DE ACTUALIZACIÓN AUTOMÁTICA (Short Polling de 5s)
+  // Cada 5 segundos se recargan los pedidos
   useEffect(() => {
     cargarDatosCocina();
     const intervaloActividad = setInterval(() => {
@@ -71,29 +67,27 @@ const GestionPedidos = () => {
     const token = localStorage.getItem('token');
     const mesaCodigo = pedidoSeleccionado.codigo_mesa;
     
-    // 🎯 Mapeamos numeroPedido contra la variable {id} del PathVariable de tu Java
     const numeroPedidoId = pedidoSeleccionado.numeroPedido;
 
     if (!mesaCodigo || !numeroPedidoId) {
-      alert("Error: Faltan identificadores obligatorios en el DTO.");
+      alert("Error: Faltan datos en el DTO."); //Alert es para notificar al usuario, no es un error de consola
       return;
     }
 
     const esEnviadoActual = pedidoSeleccionado.estado && pedidoSeleccionado.estado.toLowerCase() === 'enviado';
-    const subRutaAccion = esEnviadoActual ? 'preparacion' : 'enviado';
+    const subRutaAccion = esEnviadoActual ? 'preparacion' : 'enviado'; //Si el estado del pedido es enviado entonces esEnviadoActual es true y subrutaAccion sera preparacion
 
-    setCargandoAccion(true);
+    setCargandoAccion(true); //Congelo los botones para no clickar muchas veces
     try {
       const config = { headers: { 'Authorization': `Bearer ${token}` } };
       
-      // 🔗 Construcción exacta de la URL de tus nuevos controladores del backend
       const url = `http://localhost:8080/pedido/${encodeURIComponent(mesaCodigo)}/pedidos/${numeroPedidoId}/${subRutaAccion}`;
       
-      await axios.put(url, {}, config);
+      await axios.put(url, {}, config); //Al ser peticion PUT tengo que poner los corchetes
       
       setMostrarModalEstado(false);
       setPedidoSeleccionado(null);
-      await cargarDatosCocina(); // Forzar refresco y reordenación inmediata
+      await cargarDatosCocina(); // Forzar refresco
     } catch (err) {
       console.error("Error al modificar el estado del pedido:", err);
       alert("Error en el servidor al procesar la transición de estado.");
@@ -107,20 +101,14 @@ const GestionPedidos = () => {
     setMostrarModalEstado(true);
   };
 
-  const obtenerNombreRealProducto = (linea) => {
-    if (!linea || !linea.productoId) return 'Plato Desconocido';
-    const prod = productos.find(p => p.id === linea.productoId);
-    return prod ? prod.nombre : `Producto #${linea.productoId}`;
-  };
-
   // Filtrado de comandas en el navegador
   const pedidosFiltrados = pedidos.filter(p => {
     if (filtroSeleccionado === 'TODOS') return true;
     if (!p.estado) return false;
-    return p.estado.toLowerCase() === filtroSeleccionado.toLowerCase();
+    return p.estado.toLowerCase() === filtroSeleccionado.toLowerCase(); //Estructura del return como un if. Si el estado y el filtro coinciden entonces true
   });
 
-  const esModalEnviado = pedidoSeleccionado?.estado && pedidoSeleccionado.estado.toLowerCase() === 'enviado';
+  const esModalEnviado = pedidoSeleccionado?.estado && pedidoSeleccionado.estado.toLowerCase() === 'enviado'; //El ?. es para evitar errores de undefined por si acaso. Devuelve true si el estado del pedido seleccionado es enviado, sino false
 
   return (
     <div style={styles.wrapper}>
@@ -133,7 +121,7 @@ const GestionPedidos = () => {
         <span style={styles.liveIndicator}>🟢 Monitor en tiempo real</span>
       </div>
 
-      <h2>📋 Monitor de Control de Comandas</h2>
+      <h2 style={{ color: '#333' }}>📋 Monitor de Control de Comandas</h2>
       <p style={{ color: '#666', marginBottom: '20px' }}>
         Pulsa sobre cualquier comanda para alternar su estado entre Cocina y Sala de forma interactiva.
       </p>
@@ -205,7 +193,7 @@ const GestionPedidos = () => {
                   {(pedido.detalles || []).map((linea, i) => (
                     <li key={i} style={{ marginBottom: '8px', textAlign: 'left', fontSize: '0.92rem' }}>
                       <strong style={{ color: '#28a745', marginRight: '6px' }}>{linea.cantidad}x</strong> 
-                      <span style={{ fontWeight: '600', color: '#333' }}>{obtenerNombreRealProducto(linea)}</span>
+                      <span style={{ fontWeight: '600', color: '#333' }}>{linea.nombreProducto}</span>
                       {linea.notas && linea.notas !== "Sin notas" && <div style={styles.notes}>✏️ {linea.notas}</div>}
                     </li>
                   ))}
@@ -243,7 +231,7 @@ const GestionPedidos = () => {
               <ul style={{ margin: 0, padding: 0, listStyleType: 'none', textAlign: 'left', fontSize: '0.85rem' }}>
                 {(pedidoSeleccionado.detalles || []).map((linea, i) => (
                   <li key={i} style={{ marginBottom: '4px', color: '#495057' }}>
-                    <b>{linea.cantidad}x</b> {obtenerNombreRealProducto(linea)}
+                    <b>{linea.cantidad}x</b> {linea.nombreProducto}
                   </li>
                 ))}
               </ul>
