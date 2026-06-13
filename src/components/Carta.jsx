@@ -222,6 +222,7 @@ const Carta = () => {
       setPedidosRealizados(Array.isArray(response.data) ? response.data : []); 
     } catch (err) {
       console.error("Error al obtener pedidos de la mesa:", err);
+      setPedidosRealizados([]); //Si la mesa se cierra mientras estoy viendo el historial, se vacía para que no se vea información de la mesa que tenian.
     } finally {
       setCargandoHistorial(false);
     }
