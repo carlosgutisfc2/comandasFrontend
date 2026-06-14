@@ -7,6 +7,7 @@ import LoginEmpleado from './components/LoginEmpleado';
 import PanelEmpleado from './components/PanelEmpleado';
 import Carta from './components/Carta';
 import GestionPedidos from './components/GestionPedidos';
+import CuentasMesas from './components/CuentasMesas'; // Ajusta la ruta a tu archivo
 
 function App() {
   return (
@@ -26,7 +27,9 @@ function App() {
 
         {/* Ruta 5: Monitorización e historial global de todas las mesas */}
         <Route path="/gestion-pedidos" element={<GestionPedidos />} />
-      </Routes>
+
+        <Route path="/cuentas-mesas" element={<CuentasMesas />} />
+        </Routes>
     </Router>
   );
 }

@@ -26,6 +26,11 @@ const PanelEmpleado = () => {
   const [cargandoMesasClaves, setCargandoMesasClaves] = useState(false);
   const [errorMesasClaves, setErrorMesasClaves] = useState('');
 
+  // 🪑 ESTADOS PARA EL LISTADO DINÁMICO DE MESAS DISPONIBLES
+  const [mesasFiltradas, setMesasFiltradas] = useState([]);
+  const [cargandoMesasFiltro, setCargandoMesasFiltro] = useState(false);
+  const [errorMesasFiltro, setErrorMesasFiltro] = useState('');
+
   // 1. 🔒 CORTAFUEGOS DE SEGURIDAD
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -38,21 +43,51 @@ const PanelEmpleado = () => {
     }
   }, [navigate]);
 
-  const handleSeleccionarAccion = (accion) => {
+  // 📥 PETICIÓN GET: Carga las mesas según la acción seleccionada
+  const handleSeleccionarAccion = async (accion) => {
     setTipoAccion(accion);
     setCodigoMesa('');
     setMensajeFeedback('');
+    setMesasFiltradas([]);
+    setErrorMesasFiltro('');
     setVista('formulario');
+    setCargandoMesasFiltro(true);
+
+    const token = localStorage.getItem('token');
+    // Si queremos abrir una mesa, llamamos a libres. Si es para cerrar o comandar, a ocupadas.
+    const endpoint = accion === 'abrir' ? 'cuentasLibres' : 'cuentasOcupadas';
+
+    try {
+      const config = { headers: { 'Authorization': `Bearer ${token}` } };
+      const response = await axios.get(`http://localhost:8080/mesas/${endpoint}`, config);
+      
+      console.log(`[DEBUG] Mesas para ${accion}:`, response.data);
+      setMesasFiltradas(Array.isArray(response.data) ? response.data : []);
+    } catch (err) {
+      console.error("Error al recuperar el listado de mesas:", err);
+      if (err.response && err.response.status === 404) {
+        setMesasFiltradas([]); // El servicio devuelve 404 controlado si la lista está vacía
+      } else if (err.response) {
+        setErrorMesasFiltro(`Error (${err.response.status}): No se pudo sincronizar el mapa de mesas.`);
+      } else {
+        setErrorMesasFiltro("Error de red: El servidor Spring Boot está inaccesible.");
+      }
+    } finally {
+      setCargandoMesasFiltro(false);
+    }
   };
 
-  const handleProcesarFormulario = (e) => {
-    e.preventDefault();
-    if (!codigoMesa.trim()) return;
+  // 🔀 CONTROL DE SELECCIÓN DE MESA EN LA REJILLA
+  const handleSeleccionarMesaFisica = (codigo) => {
+    if (!codigo) return;
+    setCodigoMesa(codigo);
 
     if (tipoAccion === 'comandar') {
-      localStorage.setItem('numMesa', codigoMesa.trim().toUpperCase());
+      // Flujo directo a la comanda sin pasar por modal de confirmación
+      localStorage.setItem('numMesa', codigo.toUpperCase());
       navigate('/carta');
     } else {
+      // Abrir o Cerrar requiere confirmación de seguridad en Modal
       setMostrarModal(true);
     }
   };
@@ -97,7 +132,7 @@ const PanelEmpleado = () => {
     }
   };
 
-  // 📋 GET: Llama al controlador de contraseñas con traza de depuración
+  // 📋 GET: Llama al controlador de contraseñas
   const handleCargarMesasYContrasenas = async () => {
     setMostrarModalMesasClaves(true);
     setCargandoMesasClaves(true);
@@ -108,9 +143,7 @@ const PanelEmpleado = () => {
       const config = { headers: { 'Authorization': `Bearer ${token}` } };
       const response = await axios.get('http://localhost:8080/mesas/abiertas-contrasenas', config);
       
-      // 🎯 LOG DE DEPURACIÓN CRÍTICO: Abre la consola del navegador (F12) para ver qué llega aquí
       console.log("[DEBUG] Array recibido de Spring Boot:", response.data);
-      
       setMesasAbiertasYClaves(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       console.error("Error al recuperar credenciales de mesas:", err);
@@ -150,9 +183,9 @@ const PanelEmpleado = () => {
         </div>
       )}
 
-      {/* REJILLA (5 BOTONES) */}
+      {/* REJILLA PRINCIPAL (6 BOTONES) */}
       {vista === 'menu' ? (
-        <div style={{ ...estilosBase.gridMenu, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', maxWidth: '1000px' }}>
+        <div style={{ ...estilosBase.gridMenu, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', maxWidth: '1000px', width: '100%' }}>
           
           <div style={estilosBase.menuSquare} onClick={() => handleSeleccionarAccion('comandar')}>
             <div style={{ ...estilosBase.iconWrapper, backgroundColor: '#e7f5ff' }}>🍽️</div>
@@ -184,52 +217,77 @@ const PanelEmpleado = () => {
             <p style={estilosBase.squareDesc}>Consultar contraseñas de acceso de todas las mesas abiertas.</p>
           </div>
 
+          <div style={estilosBase.menuSquare} onClick={() => navigate('/cuentas-mesas')}>
+            <div style={{ ...estilosBase.iconWrapper, backgroundColor: '#fef3c7' }}>💰</div>
+            <h3 style={estilosBase.squareTitle}>Cuentas Activas</h3>
+            <p style={estilosBase.squareDesc}>Revisar de forma centralizada la cuenta total de las mesas ocupadas.</p>
+          </div>
+
         </div>
       ) : (
-        /* FORMULARIO */
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        /* MAPA INTERACTIVO DE SELECCIÓN DE MESAS (REEMPLAZA AL VIEJO INPUT MANAL) */
+        <div style={{ width: '100%', maxWidth: '1000px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <button style={estilosBase.backBtn} onClick={() => setVista('menu')} disabled={cargandoApi}>
             ⬅️ Volver al panel
           </button>
           
-          <div style={estilosBase.tableCard}>
-            <div style={{ fontSize: '2rem', marginBottom: '10px' }}>
+          <div style={{ ...estilosBase.tableCard, maxWidth: '800px', width: '100%', padding: '24px' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '10px' }}>
               {tipoAccion === 'comandar' ? '📝' : tipoAccion === 'abrir' ? '🔓' : '🔒'}
             </div>
-            <h3 style={{ margin: '0 0 6px 0', fontSize: '1.2rem', color: '#212529', textTransform: 'capitalize' }}>
-              {tipoAccion === 'comandar' ? 'Asignar Comanda' : `${tipoAccion} mesa`}
+            <h3 style={{ margin: '0 0 6px 0', fontSize: '1.4rem', color: '#212529', textTransform: 'capitalize' }}>
+              Seleccionar Mesa para {tipoAccion === 'comandar' ? 'Asignar Comanda' : `${tipoAccion} sesión`}
             </h3>
-            <p style={{ margin: 0, fontSize: '0.85rem', color: '#6c757d' }}>
-              Introduce el identificador de la mesa sobre la que deseas operar
+            <p style={{ margin: '0 0 25px 0', fontSize: '0.9rem', color: '#6c757d' }}>
+              {tipoAccion === 'abrir' 
+                ? 'Listado de mesas disponibles en estado LIBRE' 
+                : 'Listado de mesas activas con comanda en estado OCUPADA'}
             </p>
+
+            {/* Renderizado condicional según estado de la API de filtros */}
+            {cargandoMesasFiltro && <p style={styles.centerText}>Sincronizando plano del restaurante...</p>}
             
-            <form onSubmit={handleProcesarFormulario}>
-              <input
-                type="text"
-                placeholder="Código de Mesa (Ej: MESA1)"
-                value={codigoMesa}
-                onChange={(e) => setCodigoMesa(e.target.value)}
-                required
-                style={estilosBase.inputMesa}
-                disabled={cargandoApi}
-                autoFocus
-              />
-              <button 
-                type="submit" 
-                style={{
-                  ...estilosBase.submitMesaBtn,
-                  backgroundColor: tipoAccion === 'cerrar' ? '#fa5252' : tipoAccion === 'abrir' ? '#2b8a3e' : '#007bff'
-                }}
-                disabled={cargandoApi}
-              >
-                {cargandoApi ? 'Procesando...' : 'Continuar Acción'}
-              </button>
-            </form>
+            {errorMesasFiltro && <div style={styles.errorAlert}>{errorMesasFiltro}</div>}
+
+            {!cargandoMesasFiltro && !errorMesasFiltro && mesasFiltradas.length === 0 && (
+              <div style={styles.alertaVaciaPlano}>
+                {tipoAccion === 'abrir' 
+                  ? '🛑 El restaurante está lleno. No quedan mesas libres para inicializar.' 
+                  : '🍽️ No hay ninguna mesa ocupada actualmente en sala.'}
+              </div>
+            )}
+
+            {!cargandoMesasFiltro && !errorMesasFiltro && mesasFiltradas.length > 0 && (
+              <div style={styles.planoMesasGrid}>
+                {mesasFiltradas.map((mesaItem, index) => {
+                  const codigo = mesaItem.codigoMesa || mesaItem.codigomesa || "N/A";
+                  const cuenta = mesaItem.cuentaTotal !== undefined ? mesaItem.cuentaTotal : (mesaItem.cuentatotal || 0.0);
+
+                  return (
+                    <div 
+                      key={index} 
+                      style={{
+                        ...styles.bloqueMesaSeleccionable,
+                        borderBorderColor: tipoAccion === 'cerrar' ? '#fcc419' : '#a6a7a8',
+                        ':hover': { transform: 'scale(1.03)' }
+                      }}
+                      onClick={() => handleSeleccionarMesaFisica(codigo)}
+                    >
+                      <span style={styles.bloqueMesaIcono}>📍</span>
+                      <span style={styles.bloqueMesaCodigo}>{codigo}</span>
+                      {tipoAccion !== 'abrir' && (
+                        <span style={styles.bloqueMesaImporte}>{Number(cuenta).toFixed(2)}€</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* MODAL CONFIRMACIÓN */}
+      {/* MODAL CONFIRMACIÓN ACCIÓN */}
       {mostrarModal && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalContent}>
@@ -263,7 +321,7 @@ const PanelEmpleado = () => {
         </div>
       )}
 
-      {/* 🔑 MODAL HISTORIAL DE CLAVES (ACTUALIZADO CON RENDERIZADO DEFENSIVO TOLERANTE) */}
+      {/* 🔑 MODAL HISTORIAL DE CLAVES */}
       {mostrarModalMesasClaves && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalContent}>
@@ -291,7 +349,6 @@ const PanelEmpleado = () => {
                   </thead>
                   <tbody>
                     {mesasAbiertasYClaves.map((mesa, index) => {
-                      // 🛡️ FILTRO DEFENSIVO: Mapea correctamente sea cual sea el formato que use Jackson
                       const identificador = mesa.codigoMesa || mesa.codigomesa || mesa.codigo_mesa || "N/A";
                       const claveDescifrada = mesa.contrasena || mesa.contraseñanormal || "Error";
 
@@ -341,14 +398,22 @@ const styles = {
   closeModalCross: { background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#94a3b8' },
   divider: { height: '1px', backgroundColor: '#e2e8f0', margin: '12px 0 16px 0' },
   centerText: { color: '#64748b', textAlign: 'center', padding: '20px 0', fontSize: '0.9rem' },
-  errorAlert: { backgroundColor: '#f8d7da', color: '#721c24', padding: '12px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600', textAlign: 'left', lineHeight: '1.4' },
+  errorAlert: { backgroundColor: '#f8d7da', color: '#721c24', padding: '12px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600', textAlign: 'left', lineHeight: '1.4', marginBottom: '15px' },
   tableWrapper: { maxHeight: '250px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' },
   table: { width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' },
   th: { backgroundColor: '#f8fafc', padding: '12px', fontWeight: '700', color: '#475569', borderBottom: '1px solid #e2e8f0' },
   td: { padding: '12px', borderBottom: '1px solid #f1f5f9', color: '#334155' },
   altRow: { backgroundColor: '#f8fafc' },
   codeStyle: { backgroundColor: '#f1f5f9', padding: '4px 8px', borderRadius: '6px', color: '#0f172a', fontWeight: '700', fontFamily: 'monospace', fontSize: '0.95rem' },
-  closeModalBtn: { padding: '8px 16px', backgroundColor: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: '600', cursor: 'pointer' }
+  closeModalBtn: { padding: '8px 16px', backgroundColor: '#f1f5f9', color: '#334155', border: 'none', borderRadius: '6px', fontWeight: '600', cursor: 'pointer' },
+
+  // 🎨 ESTILOS PARA EL MAPA INTERACTIVO DE NUEVAS SELECCIONES VÍA GET
+  planoMesasGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '14px', width: '100%', marginTop: '10px' },
+  bloqueMesaSeleccionable: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '16px 10px', cursor: 'pointer', boxSizing: 'border-box', transition: 'all 0.2s' },
+  bloqueMesaIcono: { fontSize: '1.4rem' },
+  bloqueMesaCodigo: { fontWeight: '800', color: '#334155', fontSize: '0.95rem', textTransform: 'uppercase' },
+  bloqueMesaImporte: { fontSize: '1.1rem', fontWeight: '800', color: '#1e293b', backgroundColor: '#e2e8f0', padding: '2px 8px', borderRadius: '6px', marginTop: '2px', fontFamily: 'monospace' },
+  alertaVaciaPlano: { width: '100%', padding: '20px', border: '1px dashed #ced4da', backgroundColor: '#f8fafc', borderRadius: '10px', color: '#495057', fontSize: '0.95rem', fontWeight: '600', textAlign: 'center' }
 };
 
 export default PanelEmpleado;
