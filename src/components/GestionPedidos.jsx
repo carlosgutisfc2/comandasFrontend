@@ -62,39 +62,40 @@ const GestionPedidos = () => {
 
   // 🚀 PETICIÓN REST DINÁMICA (Alineada al 100% con tus nuevos @PutMapping del Controller)
   const handleCambiarEstadoPedido = async () => {
-    if (!pedidoSeleccionado) return;
+  if (!pedidoSeleccionado) return;
+  
+  const token = localStorage.getItem('token');
+  const mesaCodigo = pedidoSeleccionado.codigo_mesa;
+  const numeroPedidoId = pedidoSeleccionado.numeroPedido;
+
+  // Calculas si el nuevo estado es 'preparacion' o 'enviado'
+  const esEnviadoActual = pedidoSeleccionado.estado && pedidoSeleccionado.estado.toLowerCase() === 'enviado';
+  const subRutaAccion = esEnviadoActual ? 'preparacion' : 'enviado'; 
+
+  setCargandoAccion(true);
+  try {
+    // 1. La URL muere en el ID del pedido, ya no lleva la palabra al final
+    const url = `http://localhost:8080/pedido/${encodeURIComponent(mesaCodigo)}/pedidos/${numeroPedidoId}`;
     
-    const token = localStorage.getItem('token');
-    const mesaCodigo = pedidoSeleccionado.codigo_mesa;
+    // 2. Pasamos las cabeceras y el objeto 'params' para el RequestParam
+    const config = { 
+      headers: { 'Authorization': `Bearer ${token}` },
+      params: { estado: subRutaAccion } // ◄─ Axios monta automáticamente el ?estado=...
+    };
     
-    const numeroPedidoId = pedidoSeleccionado.numeroPedido;
-
-    if (!mesaCodigo || !numeroPedidoId) {
-      alert("Error: Faltan datos en el DTO."); //Alert es para notificar al usuario, no es un error de consola
-      return;
-    }
-
-    const esEnviadoActual = pedidoSeleccionado.estado && pedidoSeleccionado.estado.toLowerCase() === 'enviado';
-    const subRutaAccion = esEnviadoActual ? 'preparacion' : 'enviado'; //Si el estado del pedido es enviado entonces esEnviadoActual es true y subrutaAccion sera preparacion
-
-    setCargandoAccion(true); //Congelo los botones para no clickar muchas veces
-    try {
-      const config = { headers: { 'Authorization': `Bearer ${token}` } };
-      
-      const url = `http://localhost:8080/pedido/${encodeURIComponent(mesaCodigo)}/pedidos/${numeroPedidoId}/${subRutaAccion}`;
-      
-      await axios.put(url, {}, config); //Al ser peticion PUT tengo que poner los corchetes
-      
-      setMostrarModalEstado(false);
-      setPedidoSeleccionado(null);
-      await cargarDatosCocina(); // Forzar refresco
-    } catch (err) {
-      console.error("Error al modificar el estado del pedido:", err);
-      alert("Error en el servidor al procesar la transición de estado.");
-    } finally {
-      setCargandoAccion(false);
-    }
-  };
+    // 3. Petición PUT pasándole el cuerpo vacío {} en medio
+    await axios.put(url, {}, config); 
+    
+    setMostrarModalEstado(false);
+    setPedidoSeleccionado(null);
+    await cargarDatosCocina(); 
+  } catch (err) {
+    console.error("Error al modificar el estado del pedido:", err);
+    alert("Error en el servidor al procesar la transición de estado.");
+  } finally {
+    setCargandoAccion(false);
+  }
+};
 
   const handleAbrirModal = (pedido) => {
     setPedidoSeleccionado(pedido);
