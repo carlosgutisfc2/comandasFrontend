@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 const LoginMesa = () => {
-  // Estado para capturar los datos del formulario
+  // Estado para capturar los datos del formulario (mantenemos 'mesa' internamente para claridad de la UI)
   const [formData, setFormData] = useState({ mesa: '', password: '' });
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -23,12 +23,13 @@ const LoginMesa = () => {
     const { mesa, password } = formData;
 
     try {
-      // LLAMADA AL BACKEND:
-      const response = await axios.post(
-        `http://localhost:8080/mesas/${mesa}/token`, 
-        { password: password }
-      );
+      // 🚀 NUEVA LLAMADA AL BACKEND: URL limpia y mapeo exacto a loginDTO (username y password)
+      const response = await axios.post('http://localhost:8080/mesas/token', {
+        username: mesa,       // ◄─ Tu 'mesa' se envía como el campo 'username' del DTO
+        password: password    // ◄─ Tu 'password' se envía como el campo 'password' del DTO
+      });
 
+      // Validamos que el backend haya respondido con un token válido
       if (response.data && response.data.token) {
         // Guardamos el token y el código de mesa para usarlo en la carta
         localStorage.setItem('token', response.data.token);
@@ -37,13 +38,15 @@ const LoginMesa = () => {
         console.log("Login exitoso. Token guardado.");
         navigate('/carta'); 
       } else {
-        setError('La contraseña introducida no es correcta.');
+        // Si entra aquí es porque validateContra(dto) falló y devolvió un build() sin cuerpo
+        setError('El código de mesa o la contraseña introducida no son correctos.');
       }
     } catch (err) {
-      if (err.response && err.response.status === 404) {
-        setError(`La mesa "${mesa}" no existe en el sistema.`);
+      // Manejo defensivo de errores según la respuesta del backend
+      if (err.response && (err.response.status === 404 || err.response.status === 401)) {
+        setError('Credenciales inválidas. Verifica los datos de la mesa.');
       } else {
-        setError('No se pudo conectar con el servidor. Verifica el CORS.');
+        setError('No se pudo conectar con el servidor. Verifica el CORS o si el backend está levantado.');
       }
       console.error("Error en el login:", err);
     }

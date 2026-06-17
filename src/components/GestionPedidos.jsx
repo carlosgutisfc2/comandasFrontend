@@ -5,7 +5,6 @@ import axios from 'axios';
 const GestionPedidos = () => {
   const navigate = useNavigate();
   const [pedidos, setPedidos] = useState([]);
-  const [productos, setProductos] = useState([]); 
   const [cargando, setCargando] = useState(true);
   const [errorStatus, setErrorStatus] = useState('');
 
@@ -60,42 +59,37 @@ const GestionPedidos = () => {
     return () => clearInterval(intervaloActividad);
   }, []);
 
-  // 🚀 PETICIÓN REST DINÁMICA (Alineada al 100% con tus nuevos @PutMapping del Controller)
+  // 🚀 PETICIÓN REST DINÁMICA
   const handleCambiarEstadoPedido = async () => {
-  if (!pedidoSeleccionado) return;
-  
-  const token = localStorage.getItem('token');
-  const mesaCodigo = pedidoSeleccionado.codigo_mesa;
-  const numeroPedidoId = pedidoSeleccionado.numeroPedido;
+    if (!pedidoSeleccionado) return;
+    
+    const token = localStorage.getItem('token');
+    const mesaCodigo = pedidoSeleccionado.codigo_mesa;
+    const numeroPedidoId = pedidoSeleccionado.numeroPedido;
 
-  // Calculas si el nuevo estado es 'preparacion' o 'enviado'
-  const esEnviadoActual = pedidoSeleccionado.estado && pedidoSeleccionado.estado.toLowerCase() === 'enviado';
-  const subRutaAccion = esEnviadoActual ? 'preparacion' : 'enviado'; 
+    const esEnviadoActual = pedidoSeleccionado.estado && pedidoSeleccionado.estado.toLowerCase() === 'enviado';
+    const subRutaAccion = esEnviadoActual ? 'preparacion' : 'enviado'; 
 
-  setCargandoAccion(true);
-  try {
-    // 1. La URL muere en el ID del pedido, ya no lleva la palabra al final
-    const url = `http://localhost:8080/pedido/${encodeURIComponent(mesaCodigo)}/pedidos/${numeroPedidoId}`;
-    
-    // 2. Pasamos las cabeceras y el objeto 'params' para el RequestParam
-    const config = { 
-      headers: { 'Authorization': `Bearer ${token}` },
-      params: { estado: subRutaAccion } // ◄─ Axios monta automáticamente el ?estado=...
-    };
-    
-    // 3. Petición PUT pasándole el cuerpo vacío {} en medio
-    await axios.put(url, {}, config); 
-    
-    setMostrarModalEstado(false);
-    setPedidoSeleccionado(null);
-    await cargarDatosCocina(); 
-  } catch (err) {
-    console.error("Error al modificar el estado del pedido:", err);
-    alert("Error en el servidor al procesar la transición de estado.");
-  } finally {
-    setCargandoAccion(false);
-  }
-};
+    setCargandoAccion(true);
+    try {
+      const url = `http://localhost:8080/pedido/${encodeURIComponent(mesaCodigo)}/pedidos/${numeroPedidoId}`;
+      const config = { 
+        headers: { 'Authorization': `Bearer ${token}` },
+        params: { estado: subRutaAccion } 
+      };
+      
+      await axios.put(url, {}, config); 
+      
+      setMostrarModalEstado(false);
+      setPedidoSeleccionado(null);
+      await cargarDatosCocina(); 
+    } catch (err) {
+      console.error("Error al modificar el estado del pedido:", err);
+      alert("Error en el servidor al procesar la transición de estado.");
+    } finally {
+      setCargandoAccion(false);
+    }
+  };
 
   const handleAbrirModal = (pedido) => {
     setPedidoSeleccionado(pedido);
@@ -106,10 +100,10 @@ const GestionPedidos = () => {
   const pedidosFiltrados = pedidos.filter(p => {
     if (filtroSeleccionado === 'TODOS') return true;
     if (!p.estado) return false;
-    return p.estado.toLowerCase() === filtroSeleccionado.toLowerCase(); //Estructura del return como un if. Si el estado y el filtro coinciden entonces true
+    return p.estado.toLowerCase() === filtroSeleccionado.toLowerCase();
   });
 
-  const esModalEnviado = pedidoSeleccionado?.estado && pedidoSeleccionado.estado.toLowerCase() === 'enviado'; //El ?. es para evitar errores de undefined por si acaso. Devuelve true si el estado del pedido seleccionado es enviado, sino false
+  const esModalEnviado = pedidoSeleccionado?.estado && pedidoSeleccionado.estado.toLowerCase() === 'enviado';
 
   return (
     <div style={styles.wrapper}>
@@ -195,13 +189,16 @@ const GestionPedidos = () => {
                     <li key={i} style={{ marginBottom: '8px', textAlign: 'left', fontSize: '0.92rem' }}>
                       <strong style={{ color: '#28a745', marginRight: '6px' }}>{linea.cantidad}x</strong> 
                       <span style={{ fontWeight: '600', color: '#333' }}>{linea.nombreProducto}</span>
-                      {linea.notas && linea.notas !== "Sin notas" && <div style={styles.notes}>✏️ {linea.notas}</div>}
+                      {/* 🛠️ PREVISUALIZACIÓN CON CORTE LIMPIO (...) */}
+                      {linea.notas && linea.notas !== "Sin notas" && (
+                        <div style={styles.notes} title={linea.notas}>✏️ {linea.notas}</div>
+                      )}
                     </li>
                   ))}
                 </ul>
                 
                 <div style={{ marginTop: '15px', fontSize: '0.72rem', color: '#adb5bd', textAlign: 'right', borderTop: '1px dashed #f1f3f5', paddingTop: '8px' }}>
-                  🔢 Pedido Nº: {pedido.numeroPedido} • Ref BBDD: #{pedido.id}
+                  🔢 Pedido Nº: {pedido.numeroPedido}
                 </div>
               </div>
             );
@@ -231,8 +228,12 @@ const GestionPedidos = () => {
             <div style={styles.modalSummaryBox}>
               <ul style={{ margin: 0, padding: 0, listStyleType: 'none', textAlign: 'left', fontSize: '0.85rem' }}>
                 {(pedidoSeleccionado.detalles || []).map((linea, i) => (
-                  <li key={i} style={{ marginBottom: '4px', color: '#495057' }}>
+                  <li key={i} style={{ marginBottom: '8px', color: '#495057' }}>
                     <b>{linea.cantidad}x</b> {linea.nombreProducto}
+                    {/* 🛠️ DETALLE COMPLETO EN EL MODAL (Rompe hacia abajo elásticamente) */}
+                    {linea.notas && linea.notas !== "Sin notas" && (
+                      <div style={styles.modalNotes}>✏️ {linea.notas}</div>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -272,14 +273,45 @@ const styles = {
   errorAlert: { padding: '14px', backgroundColor: '#f8d7da', color: '#721c24', borderRadius: '10px', border: '1px solid #f5c6cb', fontWeight: '600', marginBottom: '20px', textAlign: 'left' },
   emptyCard: { backgroundColor: '#fff', border: '1px dashed #ced4da', borderRadius: '16px', padding: '40px', textAlign: 'center', maxWidth: '450px', margin: '6px auto' },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px', maxWidth: '1200px', margin: '0 auto' },
-  orderCard: { backgroundColor: '#fff', border: '1px solid #e9ecef', borderRadius: '16px', padding: '18px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', transition: 'all 0.2s ease' },
+  orderCard: { backgroundColor: '#fff', border: '1px solid #e9ecef', borderRadius: '16px', padding: '18px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', transition: 'all 0.2s ease', overflow: 'hidden' },
   tableBadge: { backgroundColor: '#e7f5ff', color: '#007bff', padding: '5px 10px', borderRadius: '6px', fontWeight: '700', fontSize: '0.85rem' },
   statusBadge: { padding: '5px 10px', borderRadius: '6px', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' },
   divider: { height: '1px', backgroundColor: '#f1f3f5', margin: '14px 0' },
-  notes: { fontSize: '0.78rem', color: '#6c757d', backgroundColor: '#f8f9fa', padding: '6px 10px', borderRadius: '6px', marginTop: '4px', fontStyle: 'italic', borderLeft: '3px solid #ced4da' },
+  
+  // 🎯 MODIFICADO: Estilo para la previsualización (Recorte en 1 sola línea)
+  notes: { 
+    fontSize: '0.78rem', 
+    color: '#6c757d', 
+    backgroundColor: '#f8f9fa', 
+    padding: '6px 10px', 
+    borderRadius: '6px', 
+    marginTop: '4px', 
+    fontStyle: 'italic', 
+    borderLeft: '3px solid #ced4da',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    display: 'block'
+  },
+  
+  // 🎯 NUEVO: Estilo elástico para el interior del Modal (Rompe palabras infinitas y salta de línea)
+  modalNotes: {
+    fontSize: '0.78rem', 
+    color: '#6c757d', 
+    backgroundColor: '#f8f9fa', 
+    padding: '6px 10px', 
+    borderRadius: '6px', 
+    marginTop: '4px', 
+    fontStyle: 'italic', 
+    borderLeft: '3px solid #ced4da',
+    wordBreak: 'break-all',
+    whiteSpace: 'pre-wrap',
+    textAlign: 'left'
+  },
+
   modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.4)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 3000, backdropFilter: 'blur(2px)' },
   modalContent: { backgroundColor: '#fff', padding: '24px', borderRadius: '16px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', width: '90%', maxWidth: '380px', textAlign: 'center', boxSizing: 'border-box' },
-  modalSummaryBox: { backgroundColor: '#f8f9fa', border: '1px solid #e9ecef', borderRadius: '10px', padding: '12px', margin: '12px 0 20px 0', maxHeight: '120px', overflowY: 'auto' },
+  modalSummaryBox: { backgroundColor: '#f8f9fa', border: '1px solid #e9ecef', borderRadius: '10px', padding: '12px', margin: '12px 0 20px 0', maxHeight: '180px', overflowY: 'auto' },
   modalActions: { display: 'flex', gap: '10px', justifyContent: 'center' },
   cancelarBtn: { padding: '10px 16px', backgroundColor: '#f1f3f5', color: '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.88rem', flex: 1 },
   confirmarBtn: { padding: '10px 16px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '0.88rem', flex: 2 }

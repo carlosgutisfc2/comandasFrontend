@@ -141,7 +141,7 @@ const PanelEmpleado = () => {
     const token = localStorage.getItem('token');
     try {
       const config = { headers: { 'Authorization': `Bearer ${token}` } };
-      const response = await axios.get('http://localhost:8080/mesas/abiertas-contrasenas', config);
+      const response = await axios.get('http://localhost:8080/mesas/ocupadas-contrasenas', config);
       
       console.log("[DEBUG] Array recibido de Spring Boot:", response.data);
       setMesasAbiertasYClaves(Array.isArray(response.data) ? response.data : []);
@@ -214,7 +214,7 @@ const PanelEmpleado = () => {
           <div style={estilosBase.menuSquare} onClick={handleCargarMesasYContrasenas}>
             <div style={{ ...estilosBase.iconWrapper, backgroundColor: '#f3e8ff' }}>🔑</div>
             <h3 style={estilosBase.squareTitle}>Ver Claves</h3>
-            <p style={estilosBase.squareDesc}>Consultar contraseñas de acceso de todas las mesas abiertas.</p>
+            <p style={estilosBase.squareDesc}>Consultar contraseñas de acceso de todas las mesas ocupadas.</p>
           </div>
 
           <div style={estilosBase.menuSquare} onClick={() => navigate('/cuentas-mesas')}>
