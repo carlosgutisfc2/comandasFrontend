@@ -101,7 +101,7 @@ const Carta = () => {
         await cargarTotalMesa();
 
         // 3. Obtenemos los productos disponibles del catálogo
-        const response = await axios.get('http://localhost:8080/productos', config);
+        const response = await axios.get('http://localhost:8080/productos?disponibilidad=true', config);
         setProductosMenu(Array.isArray(response.data) ? response.data : []);
 
       } catch (err) {

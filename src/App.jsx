@@ -8,6 +8,8 @@ import PanelEmpleado from './components/PanelEmpleado';
 import Carta from './components/Carta';
 import GestionPedidos from './components/GestionPedidos';
 import CuentasMesas from './components/CuentasMesas'; // Ajusta la ruta a tu archivo
+import GestionProductos from './components/GestionProductos'; // O './components/GestionProductos' según tu estructura
+
 
 function App() {
   return (
@@ -29,6 +31,9 @@ function App() {
         <Route path="/gestion-pedidos" element={<GestionPedidos />} />
 
         <Route path="/cuentas-mesas" element={<CuentasMesas />} />
+
+        <Route path="/gestion-productos" element={<GestionProductos />} />
+        
         </Routes>
     </Router>
   );

@@ -55,7 +55,7 @@ const PanelEmpleado = () => {
 
     const token = localStorage.getItem('token');
     // Si queremos abrir una mesa, llamamos a libres. Si es para cerrar o comandar, a ocupadas.
-    const endpoint = accion === 'abrir' ? 'cuentasLibres' : 'cuentasOcupadas';
+    const endpoint = accion === 'abrir' ? 'libres' : 'cuentasOcupadas';
 
     try {
       const config = { headers: { 'Authorization': `Bearer ${token}` } };
@@ -221,6 +221,12 @@ const PanelEmpleado = () => {
             <div style={{ ...estilosBase.iconWrapper, backgroundColor: '#fef3c7' }}>💰</div>
             <h3 style={estilosBase.squareTitle}>Cuentas Activas</h3>
             <p style={estilosBase.squareDesc}>Revisar de forma centralizada la cuenta total de las mesas ocupadas.</p>
+          </div>
+
+          <div style={estilosBase.menuSquare} onClick={() => navigate('/gestion-productos')}>
+            <div style={{ ...estilosBase.iconWrapper, backgroundColor: '#fff3bf' }}>🍔</div>
+            <h3 style={estilosBase.squareTitle}>Disponibilidad</h3>
+            <p style={estilosBase.squareDesc}>Activar o agotar platos de la carta digital de forma inmediata.</p>
           </div>
 
         </div>

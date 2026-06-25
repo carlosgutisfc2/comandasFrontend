@@ -67,7 +67,7 @@ const GestionPedidos = () => {
     const mesaCodigo = pedidoSeleccionado.codigo_mesa;
     const numeroPedidoId = pedidoSeleccionado.numeroPedido;
 
-    const esEnviadoActual = pedidoSeleccionado.estado && pedidoSeleccionado.estado.toLowerCase() === 'enviado';
+    const esEnviadoActual = pedidoSeleccionado.estado && pedidoSeleccionado.estado.toLowerCase() === 'enviado'; //Es true si el pedido está actualmente en estado "enviado"
     const subRutaAccion = esEnviadoActual ? 'preparacion' : 'enviado'; 
 
     setCargandoAccion(true);
